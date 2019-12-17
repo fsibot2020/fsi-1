@@ -10,7 +10,6 @@ restService.use(
     extended: true
   })
 );
-
 restService.use(bodyParser.json());
 
 restService.post("/echo", function(req, res) {
