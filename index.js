@@ -1,218 +1,128 @@
-"use strict";
-
-const express = require("express");
-const bodyParser = require("body-parser");
-
+const express = require('express');
+const bodyParser = require('body-parser');
+const serverPort = 3000;
 const restService = express();
-const port = 8000;
+
 restService.use(
-  bodyParser.urlencoded({
-    extended: true
-  })
+    bodyParser.urlencoded({
+        extended: true,
+    })
 );
+
 restService.use(bodyParser.json());
 
-restService.post("/echo", function (req, res) {
-  var speech =
-    req.body.queryResult &&
-      req.body.queryResult.parameters &&
-      req.body.queryResult.parameters.echoText
-      ? req.body.queryResult.parameters.echoText
-      : "Seems like some problem. Speak again.";
+const {Pool, Client} = require('pg');
+const connectionString = 'postgressql://postgres:admin@localhost:5432/postgres';
+const client = new Client({
+    connectionString: connectionString
+})
 
-  var speechResponse = {
-    google: {
-      expectUserResponse: true,
-      richResponse: {
-        items: [
-          {
-            simpleResponse: {
-              textToSpeech: speech
+restService.get("/loanCalculation", function (req, res) {
+    var debtAmt = req.body.queryResult &&
+    req.body.queryResult.parameters &&
+    req.body.queryResult.parameters.debtAmt
+        ? req.body.queryResult.parameters.debtAmt
+        : "Seems like some problem. Enter another amount again.";
+    console.log(debtAmt);
+    var nOfMonths = req.body.queryResult &&
+    req.body.queryResult.parameters &&
+    req.body.queryResult.parameters.noOfmonths
+        ? req.body.queryResult.parameters.noOfmonths
+        : "Seems like some problem. Enter no. of months again.";
+    console.log(nOfMonths);
+    var rate = 15;
+    console.log(rate);
+    client.connect();
+    var installmentAmount;
+    client.query('select calc_premium('+debtAmt+','+nOfMonths+','+ rate+')',(err, result) => {
+
+        // client.query('select calc_premium(?, ?, ?)',[debtAmt, nOfMonths, rate] ,(err, res) => {
+        // console.log(result);
+        // console.log(err, result)
+        client.end()
+        var varresult = JSON.stringify(result.rows[0])
+        varresult = varresult.replace(/(^\[)/, '');
+        varresult =  varresult.replace(/(\]$)/, '');
+        try {
+            var resultObj = JSON.parse(varresult);
+        } catch (e) {
+            console.log("Error, not a valid JSON string");
+        }
+        installmentAmount = resultObj["calc_premium"];
+        console.log(installmentAmount)
+
+
+        var finalResult={
+            responseId: "598fa6ab-a758-4347-8817-2b321f15ff04-b4ef8d5f",
+            queryResult: {
+                queryText: "12",
+                parameters: {
+                    debtAmt: debtAmt,
+                    noOfmonths: nOfMonths
+                },
+                allRequiredParamsPresent: true,
+                fulfillmentText: "you will pay "+installmentAmount+" for "+nOfMonths+ " months",
+                fulfillmentMessages: [
+                    {
+                        text: {
+                            text: [
+                                "you will pay "+installmentAmount+" for "+nOfMonths+ " months"
+                            ]
+                        }
+                    }
+                ],
+                intent: {
+                    name: "projects/fsi-bot-kqelyg/agent/intents/3c7b592b-95f7-4218-b645-9c5aa52069b5",
+                    displayName: "Loan Calculation"
+                },
+                intentDetectionConfidence: 0.01,
+                languageCode: "en"
             }
-          }
-        ]
-      }
-    }
-  };
-
-  return res.json({
-    payload: speechResponse,
-    //data: speechResponse,
-    fulfillmentText: speech,
-    speech: speech,
-    displayText: speech,
-    source: "webhook-echo-sample"
-  });
+        };
+        console.log(finalResult);
+  return res.status(200).json(finalResult);
+    })
 });
 
-restService.post("/audio", function (req, res) {
-  var speech = "";
-  switch (req.body.result.parameters.AudioSample.toLowerCase()) {
-    //Speech Synthesis Markup Language 
-    case "music one":
-      speech =
-        '<speak><audio src="https://actions.google.com/sounds/v1/cartoon/slide_whistle.ogg">did not get your audio file</audio></speak>';
-      break;
-    case "music two":
-      speech =
-        '<speak><audio clipBegin="1s" clipEnd="3s" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle.ogg">did not get your audio file</audio></speak>';
-      break;
-    case "music three":
-      speech =
-        '<speak><audio repeatCount="2" soundLevel="-15db" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle.ogg">did not get your audio file</audio></speak>';
-      break;
-    case "music four":
-      speech =
-        '<speak><audio speed="200%" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle.ogg">did not get your audio file</audio></speak>';
-      break;
-    case "music five":
-      speech =
-        '<audio src="https://actions.google.com/sounds/v1/cartoon/slide_whistle.ogg">did not get your audio file</audio>';
-      break;
-    case "delay":
-      speech =
-        '<speak>Let me take a break for 3 seconds. <break time="3s"/> I am back again.</speak>';
-      break;
-    //https://www.w3.org/TR/speech-synthesis/#S3.2.3
-    case "cardinal":
-      speech = '<speak><say-as interpret-as="cardinal">12345</say-as></speak>';
-      break;
-    case "ordinal":
-      speech =
-        '<speak>I stood <say-as interpret-as="ordinal">10</say-as> in the class exams.</speak>';
-      break;
-    case "characters":
-      speech =
-        '<speak>Hello is spelled as <say-as interpret-as="characters">Hello</say-as></speak>';
-      break;
-    case "fraction":
-      speech =
-        '<speak>Rather than saying 24+3/4, I should say <say-as interpret-as="fraction">24+3/4</say-as></speak>';
-      break;
-    case "bleep":
-      speech =
-        '<speak>I do not want to say <say-as interpret-as="bleep">F&%$#</say-as> word</speak>';
-      break;
-    case "unit":
-      speech =
-        '<speak>This road is <say-as interpret-as="unit">50 foot</say-as> wide</speak>';
-      break;
-    case "verbatim":
-      speech =
-        '<speak>You spell HELLO as <say-as interpret-as="verbatim">hello</say-as></speak>';
-      break;
-    case "date one":
-      speech =
-        '<speak>Today is <say-as interpret-as="date" format="yyyymmdd" detail="1">2017-12-16</say-as></speak>';
-      break;
-    case "date two":
-      speech =
-        '<speak>Today is <say-as interpret-as="date" format="dm" detail="1">16-12</say-as></speak>';
-      break;
-    case "date three":
-      speech =
-        '<speak>Today is <say-as interpret-as="date" format="dmy" detail="1">16-12-2017</say-as></speak>';
-      break;
-    case "time":
-      speech =
-        '<speak>It is <say-as interpret-as="time" format="hms12">2:30pm</say-as> now</speak>';
-      break;
-    case "telephone one":
-      speech =
-        '<speak><say-as interpret-as="telephone" format="91">09012345678</say-as> </speak>';
-      break;
-    case "telephone two":
-      speech =
-        '<speak><say-as interpret-as="telephone" format="1">(781) 771-7777</say-as> </speak>';
-      break;
-    // https://www.w3.org/TR/2005/NOTE-ssml-sayas-20050526/#S3.3
-    case "alternate":
-      speech =
-        '<speak>IPL stands for <sub alias="indian premier league">IPL</sub></speak>';
-      break;
-  }
-  return res.json({
-    speech: speech,
-    displayText: speech,
-    source: "webhook-echo-sample"
-  });
+// restService.get("/InstallmentSchedule", function (req, res) {
+//     var customerId = req.;
+//     console.log(customerId);
+//     var debtNo = req.;
+//     console.log(debtNo);
+//     var busdate = req.;
+//     console.log(busdate);
+//     var rate = req.;
+//     console.log(rate);
+//     var period = req.;
+//     console.log(period);
+//     var totalLoanAmt = req.;
+//     console.log(totalLoanAmt);
+//     var kstAmt = req.;
+//     console.log(kstAmt);
+//     var kstDate = req.;
+//     console.log(kstDate);
+//     client.connect();
+//     client.query('select last_day(current_date)', (err, res) => {
+//         console.log(err, res)
+//         client.end()
+//     })
+//     return res.json.stringify()
+// });
+
+
+// restService.get("/lastDay", function (req, res) {
+//   var speech = "inside the lastDay function ....";
+//   console.log(speech);
+// client.connect();
+// client.query('select last_day(current_date)', (err, res) =>{
+// console.log(err,res)
+// client.end()
+// })
+//
+// return res.json.stringify()
+// });
+
+restService.listen(process.env.PORT || serverPort, function () {
+    console.log("Server up and listening on port " + serverPort);
 });
 
-restService.post("/video", function (req, res) {
-  return res.json({
-    speech:
-      '<speak>  <audio src="https://www.youtube.com/watch?v=VX7SSnvpj-8">did not get your MP3 audio file</audio></speak>',
-    displayText:
-      '<speak>  <audio src="https://www.youtube.com/watch?v=VX7SSnvpj-8">did not get your MP3 audio file</audio></speak>',
-    source: "webhook-echo-sample"
-  });
-});
-
-restService.post("/slack-test", function (req, res) {
-  var slack_message = {
-    text: "Details of JIRA board for Browse and Commerce",
-    attachments: [
-      {
-        title: "JIRA Board",
-        title_link: "http://www.google.com",
-        color: "#36a64f",
-
-        fields: [
-          {
-            title: "Epic Count",
-            value: "50",
-            short: "false"
-          },
-          {
-            title: "Story Count",
-            value: "40",
-            short: "false"
-          }
-        ],
-
-        thumb_url:
-          "https://stiltsoft.com/blog/wp-content/uploads/2016/01/5.jira_.png"
-      },
-      {
-        title: "Story status count",
-        title_link: "http://www.google.com",
-        color: "#f49e42",
-
-        fields: [
-          {
-            title: "Not started",
-            value: "50",
-            short: "false"
-          },
-          {
-            title: "Development",
-            value: "40",
-            short: "false"
-          },
-          {
-            title: "Development",
-            value: "40",
-            short: "false"
-          },
-          {
-            title: "Development",
-            value: "40",
-            short: "false"
-          }
-        ]
-      }
-    ]
-  };
-  return res.json({
-    speech: "speech",
-    displayText: "speech",
-    source: "webhook-echo-sample",
-    data: {
-      slack: slack_message
-    }
-  });
-});
-
-restService.listen(process.env.PORT || port, function () {
-  console.log("Server up and listening on port " + port);
-});
